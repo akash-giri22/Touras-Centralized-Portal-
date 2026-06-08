@@ -1,0 +1,55 @@
+version: "3.9"
+
+services:
+  touras-portal:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: touras-portal
+    image: touras-portal:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - NEXT_TELEMETRY_DISABLED=1
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # ── Uncomment below when you add the NestJS backend ──
+  # touras-api:
+  #   build:
+  #     context: ./backend
+  #     dockerfile: Dockerfile
+  #   container_name: touras-api
+  #   ports:
+  #     - "4000:4000"
+  #   environment:
+  #     - NODE_ENV=production
+  #     - DB_HOST=touras-db
+  #     - DB_PORT=1433
+  #     - JWT_SECRET=your_secret_here
+  #   depends_on:
+  #     - touras-db
+  #   restart: unless-stopped
+
+  # ── Uncomment for SQL Server ──
+  # touras-db:
+  #   image: mcr.microsoft.com/mssql/server:2022-latest
+  #   container_name: touras-db
+  #   ports:
+  #     - "1433:1433"
+  #   environment:
+  #     - ACCEPT_EULA=Y
+  #     - SA_PASSWORD=Touras@2025
+  #     - MSSQL_PID=Express
+  #   volumes:
+  #     - touras_db_data:/var/opt/mssql
+  #   restart: unless-stopped
+
+# volumes:
+#   touras_db_data:

@@ -1,0 +1,35 @@
+{
+  "name": "touras-portal",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@aws-sdk/client-ec2": "^3.1045.0",
+    "@aws-sdk/client-iam": "^3.1045.0",
+    "@aws-sdk/client-s3": "^3.1045.0",
+    "@types/node": "^20",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "autoprefixer": "^10.4.19",
+    "bcryptjs": "^3.0.3",
+    "clsx": "^2.1.1",
+    "jsonwebtoken": "^9.0.3",
+    "lucide-react": "^0.378.0",
+    "mongoose": "^9.6.1",
+    "next": "14.2.5",
+    "postcss": "^8.4.38",
+    "react": "^18",
+    "react-dom": "^18",
+    "recharts": "^2.15.4",
+    "tailwindcss": "^3.4.1",
+    "typescript": "^5"
+  },
+  "devDependencies": {
+    "@types/jsonwebtoken": "^9.0.10"
+  }
+}
