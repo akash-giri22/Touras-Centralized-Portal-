@@ -10,7 +10,8 @@ export interface ITicket extends Document {
   raisedBy:     mongoose.Types.ObjectId;
   assignedTo?:  mongoose.Types.ObjectId;
   comments:     { userId: mongoose.Types.ObjectId; text: string; createdAt: Date }[];
-resolvedAt: { type: Date, default: null },}
+  resolvedAt?:  Date;
+}
 
 const TicketSchema = new Schema<ITicket>({
   ticketNumber: { type: String, unique: true },
