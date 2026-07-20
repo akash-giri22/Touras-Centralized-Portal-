@@ -4,6 +4,7 @@ import { useAuth } from '@/lib/auth-context';
 import {
   Plus, X, RefreshCw, MessageSquare,
   ChevronDown, ChevronUp, Send, Ticket, Tag, Search,
+  Monitor, Wifi, Key, HelpCircle, Laptop,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
  
@@ -11,28 +12,33 @@ const CATEGORIES = ['hardware', 'software', 'network', 'access', 'other'];
 const PRIORITIES  = ['low', 'medium', 'high', 'critical'];
 const STATUSES    = ['open', 'in-progress', 'resolved', 'closed'];
  
-const priorityColor = (p: string) => {
-  if (p === 'critical') return 'text-red-400    bg-red-400/10    border-red-400/20';
-  if (p === 'high')     return 'text-orange-400 bg-orange-400/10 border-orange-400/20';
-  if (p === 'medium')   return 'text-amber-400  bg-amber-400/10  border-amber-400/20';
-  if (p === 'low')      return 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20';
-  return '';
+const priorityConfig: Record<string, { label: string; cls: string }> = {
+  critical: { label: 'Critical', cls: 'text-red-700    bg-red-100    border-red-300'    },
+  high:     { label: 'High',     cls: 'text-orange-700 bg-orange-100 border-orange-300' },
+  medium:   { label: 'Medium',   cls: 'text-amber-700  bg-amber-100  border-amber-300'  },
+  low:      { label: 'Low',      cls: 'text-green-700  bg-green-100  border-green-300'  },
 };
  
-const statusColor = (s: string) => {
-  if (s === 'open')        return 'text-blue-400    bg-blue-400/10    border-blue-400/20';
-  if (s === 'in-progress') return 'text-amber-400   bg-amber-400/10   border-amber-400/20';
-  if (s === 'resolved')    return 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20';
-  if (s === 'closed')      return 'text-slate-400   bg-slate-400/10   border-slate-400/20';
-  return '';
+const statusConfig: Record<string, { label: string; cls: string; dot: string }> = {
+  'open':        { label: 'Open',        cls: 'text-blue-700   bg-blue-100   border-blue-300',   dot: 'bg-blue-500'   },
+  'in-progress': { label: 'In Progress', cls: 'text-amber-700  bg-amber-100  border-amber-300',  dot: 'bg-amber-500'  },
+  'resolved':    { label: 'Resolved',    cls: 'text-green-700  bg-green-100  border-green-300',  dot: 'bg-green-500'  },
+  'closed':      { label: 'Closed',      cls: 'text-slate-500  bg-slate-100  border-slate-300',  dot: 'bg-slate-400'  },
 };
  
-const categoryIcon = (c: string) => {
-  if (c === 'hardware') return '🖥️';
-  if (c === 'software') return '💻';
-  if (c === 'network')  return '🌐';
-  if (c === 'access')   return '🔑';
-  return '🎫';
+const categoryConfig: Record<string, { icon: React.ReactNode; color: string }> = {
+  hardware: { icon: <Monitor   className="w-5 h-5" />, color: '#6366f1' },
+  software: { icon: <Laptop    className="w-5 h-5" />, color: '#8b5cf6' },
+  network:  { icon: <Wifi      className="w-5 h-5" />, color: '#0ea5e9' },
+  access:   { icon: <Key       className="w-5 h-5" />, color: '#f59e0b' },
+  other:    { icon: <HelpCircle className="w-5 h-5" />, color: '#64748b' },
+};
+ 
+const PRIORITY_BTN: Record<string, string> = {
+  low:      'border-green-300  bg-green-50  text-green-700  hover:bg-green-100',
+  medium:   'border-amber-300  bg-amber-50  text-amber-700  hover:bg-amber-100',
+  high:     'border-orange-300 bg-orange-50 text-orange-700 hover:bg-orange-100',
+  critical: 'border-red-300    bg-red-50    text-red-700    hover:bg-red-100',
 };
  
 export default function TicketsPage() {
@@ -83,25 +89,16 @@ export default function TicketsPage() {
     if (user) Promise.all([fetchTickets(), fetchUsers()]).finally(() => setLoading(false));
   }, [user]);
  
-  // Split tickets into raised-by-me vs assigned-to-me
   const myTickets       = tickets.filter(t => t.raisedBy?._id === user?.id || t.raisedBy === user?.id);
   const assignedTickets = tickets.filter(t => t.assignedTo?._id === user?.id || t.assignedTo === user?.id);
+  const baseList        = isEmp ? (activeTab === 'my' ? myTickets : assignedTickets) : tickets;
  
-  // Which list to show based on tab (employees) or all for admin/manager
-  const baseList = isEmp
-    ? (activeTab === 'my' ? myTickets : assignedTickets)
-    : tickets;
- 
-  // Apply status filter + search
   const filtered = baseList
     .filter(t => filterStatus === 'all' || t.status === filterStatus)
     .filter(t => {
       if (!searchQuery.trim()) return true;
       const q = searchQuery.toLowerCase();
-      return (
-        t.ticketNumber?.toLowerCase().includes(q) ||
-        t.title?.toLowerCase().includes(q)
-      );
+      return t.ticketNumber?.toLowerCase().includes(q) || t.title?.toLowerCase().includes(q);
     });
  
   const handleCreate = async () => {
@@ -110,11 +107,7 @@ export default function TicketsPage() {
       const res  = await fetch('/api/tickets', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({
-          ...form,
-          raisedBy:   user?.id,
-          assignedTo: form.taggedUserId || undefined,
-        }),
+        body:    JSON.stringify({ ...form, raisedBy: user?.id, assignedTo: form.taggedUserId || undefined }),
       });
       const data = await res.json();
       if (!res.ok) showToast(data.message || 'Failed', 'error');
@@ -124,27 +117,17 @@ export default function TicketsPage() {
         setForm({ title: '', description: '', category: 'software', priority: 'medium', taggedUserId: '' });
         fetchTickets();
       }
-    } catch (err: any) {
-      showToast(err.message, 'error');
-    }
+    } catch (err: any) { showToast(err.message, 'error'); }
   };
  
   const handleStatusChange = async (id: string, status: string) => {
-    await fetch('/api/tickets', {
-      method:  'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ id, status }),
-    });
+    await fetch('/api/tickets', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, status }) });
     showToast('Status updated');
     fetchTickets();
   };
  
   const handleAssign = async (id: string, assignedTo: string) => {
-    await fetch('/api/tickets', {
-      method:  'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ id, assignedTo, status: 'in-progress' }),
-    });
+    await fetch('/api/tickets', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, assignedTo, status: 'in-progress' }) });
     showToast('Ticket assigned');
     fetchTickets();
   };
@@ -152,112 +135,129 @@ export default function TicketsPage() {
   const handleComment = async (id: string) => {
     const text = comments[id] || '';
     if (!text.trim()) return;
-    await fetch('/api/tickets', {
-      method:  'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ id, comment: text, userId: user?.id }),
-    });
+    await fetch('/api/tickets', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, comment: text, userId: user?.id }) });
     setComments(c => ({ ...c, [id]: '' }));
     showToast('Comment added');
     fetchTickets();
   };
  
+  // ── Stat counts ──
+  const counts = {
+    all:         tickets.length,
+    open:        tickets.filter(t => t.status === 'open').length,
+    'in-progress': tickets.filter(t => t.status === 'in-progress').length,
+    resolved:    tickets.filter(t => t.status === 'resolved').length,
+    closed:      tickets.filter(t => t.status === 'closed').length,
+  };
+ 
+  const statCards = [
+    { key: 'all',         label: 'Total',       color: 'text-indigo-600' },
+    { key: 'open',        label: 'Open',         color: 'text-blue-600'   },
+    { key: 'in-progress', label: 'In Progress',  color: 'text-amber-600'  },
+    { key: 'resolved',    label: 'Resolved',     color: 'text-green-600'  },
+    { key: 'closed',      label: 'Closed',       color: 'text-slate-500'  },
+  ];
+ 
+  // ── Ticket Card ──
   const TicketCard = ({ ticket }: { ticket: any }) => {
-    const isExpanded  = expandedId === ticket._id;
+    const isExpanded     = expandedId === ticket._id;
     const isAssignedToMe = ticket.assignedTo?._id === user?.id || ticket.assignedTo === user?.id;
+    const sc  = statusConfig[ticket.status]   || statusConfig['open'];
+    const pc  = priorityConfig[ticket.priority] || priorityConfig['medium'];
+    const cat = categoryConfig[ticket.category] || categoryConfig['other'];
  
     return (
-      <div className="glass-card rounded-2xl overflow-hidden">
+      <div className={cn(
+        'rounded-2xl border transition-all overflow-hidden',
+        isExpanded
+          ? 'border-indigo-200 shadow-md shadow-indigo-50'
+          : 'border-slate-200 hover:border-slate-300 hover:shadow-sm',
+      )} style={{ background: 'var(--card-bg, #fff)' }}>
  
-        {/* Ticket Header — always clickable */}
-        <div className="p-5 cursor-pointer"
-          onClick={() => setExpandedId(isExpanded ? null : ticket._id)}>
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex items-start gap-3 flex-1">
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl shrink-0"
-                style={{ background: 'var(--bg-surface-2)' }}>
-                {categoryIcon(ticket.category)}
+        {/* Header */}
+        <div className="p-4 cursor-pointer" onClick={() => setExpandedId(isExpanded ? null : ticket._id)}>
+          <div className="flex items-start gap-3">
+            {/* Cat icon */}
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 mt-0.5"
+              style={{ backgroundColor: cat.color + '15', color: cat.color }}>
+              {cat.icon}
+            </div>
+ 
+            <div className="flex-1 min-w-0">
+              {/* Badges row */}
+              <div className="flex flex-wrap gap-1.5 mb-1.5">
+                <span className="font-mono text-xs px-2 py-0.5 rounded-md"
+                  style={{ background: 'var(--bg-surface-2, #f1f5f9)', color: 'var(--text-muted, #64748b)' }}>
+                  {ticket.ticketNumber}
+                </span>
+                <span className={cn('text-xs px-2 py-0.5 rounded-full border font-medium flex items-center gap-1', sc.cls)}>
+                  <span className={cn('w-1.5 h-1.5 rounded-full', sc.dot)} />
+                  {sc.label}
+                </span>
+                <span className={cn('text-xs px-2 py-0.5 rounded-full border font-medium capitalize', pc.cls)}>
+                  {pc.label}
+                </span>
+                <span className="text-xs px-2 py-0.5 rounded-full capitalize"
+                  style={{ background: 'var(--bg-surface-2, #f1f5f9)', color: 'var(--text-muted, #64748b)', border: '1px solid var(--border, #e2e8f0)' }}>
+                  {ticket.category}
+                </span>
+                {isAssignedToMe && (
+                  <span className="text-xs px-2 py-0.5 rounded-full font-medium"
+                    style={{ background: 'rgba(99,102,241,0.1)', color: '#6366f1', border: '1px solid rgba(99,102,241,0.25)' }}>
+                    Assigned to you
+                  </span>
+                )}
               </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap mb-1">
-                  <span className="text-xs font-mono px-2 py-0.5 rounded-lg"
-                    style={{ background: 'var(--bg-surface-2)', color: 'var(--text-muted)' }}>
-                    {ticket.ticketNumber}
-                  </span>
-                  <span className={cn('text-xs px-2 py-0.5 rounded-full border font-medium capitalize', statusColor(ticket.status))}>
-                    {ticket.status}
-                  </span>
-                  <span className={cn('text-xs px-2 py-0.5 rounded-full border font-medium capitalize', priorityColor(ticket.priority))}>
-                    {ticket.priority}
-                  </span>
-                  <span className="text-xs px-2 py-0.5 rounded-full capitalize"
-                    style={{ background: 'var(--bg-surface-2)', color: 'var(--text-muted)' }}>
-                    {ticket.category}
-                  </span>
-                  {/* Assigned-to-me badge */}
-                  {isAssignedToMe && (
-                    <span className="text-xs px-2 py-0.5 rounded-full font-medium"
-                      style={{ background: 'rgba(99,102,241,0.15)', color: '#818cf8' }}>
-                      Assigned to you
-                    </span>
-                  )}
-                </div>
  
-                <p className="font-semibold" style={{ color: 'var(--text-primary)' }}>
-                  {ticket.title}
-                </p>
-                <p className="text-xs mt-0.5 line-clamp-1" style={{ color: 'var(--text-muted)' }}>
-                  {ticket.description}
-                </p>
+              {/* Title + desc */}
+              <p className="font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>{ticket.title}</p>
+              <p className="text-xs mt-0.5 line-clamp-1" style={{ color: 'var(--text-muted)' }}>{ticket.description}</p>
  
-                <div className="flex items-center gap-3 mt-2 flex-wrap">
-                  <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                    By: <span style={{ color: 'var(--text-secondary)' }}>{ticket.raisedBy?.name}</span>
-                  </span>
-                  {ticket.assignedTo && (
-                    <span className="text-xs flex items-center gap-1" style={{ color: 'var(--text-muted)' }}>
-                      <Tag className="w-3 h-3" />
-                      Assigned: <span style={{ color: '#818cf8' }}>{ticket.assignedTo?.name}</span>
-                    </span>
-                  )}
+              {/* Footer meta */}
+              <div className="flex flex-wrap items-center gap-3 mt-2">
+                <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                  By <span style={{ color: 'var(--text-secondary)' }}>{ticket.raisedBy?.name}</span>
+                </span>
+                {ticket.assignedTo && (
                   <span className="text-xs flex items-center gap-1" style={{ color: 'var(--text-muted)' }}>
-                    <MessageSquare className="w-3 h-3" /> {ticket.comments?.length || 0}
+                    <Tag className="w-3 h-3" />
+                    <span style={{ color: '#6366f1' }}>{ticket.assignedTo?.name}</span>
                   </span>
-                  <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                    {new Date(ticket.createdAt).toLocaleDateString()}
-                  </span>
-                </div>
+                )}
+                <span className="text-xs flex items-center gap-1" style={{ color: 'var(--text-muted)' }}>
+                  <MessageSquare className="w-3 h-3" /> {ticket.comments?.length || 0}
+                </span>
+                <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                  {new Date(ticket.createdAt).toLocaleDateString()}
+                </span>
               </div>
             </div>
  
             {isExpanded
-              ? <ChevronUp   className="w-4 h-4 shrink-0 mt-1" style={{ color: 'var(--text-muted)' }} />
-              : <ChevronDown className="w-4 h-4 shrink-0 mt-1" style={{ color: 'var(--text-muted)' }} />}
+              ? <ChevronUp   className="w-4 h-4 shrink-0 mt-1 text-slate-400" />
+              : <ChevronDown className="w-4 h-4 shrink-0 mt-1 text-slate-400" />}
           </div>
         </div>
  
-        {/* ── Expanded Detail View ── */}
+        {/* Expanded */}
         {isExpanded && (
-          <div className="px-5 pb-5 space-y-4" style={{ borderTop: '1px solid var(--border)' }}>
+          <div className="px-4 pb-5 space-y-4" style={{ borderTop: '1px solid var(--border, #e2e8f0)' }}>
  
             {/* Info grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 rounded-xl mt-4"
-              style={{ background: 'var(--bg-surface-2)', border: '1px solid var(--border)' }}>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 p-4 rounded-xl"
+              style={{ background: 'var(--bg-surface-2, #f8fafc)', border: '1px solid var(--border, #e2e8f0)' }}>
               {[
-                { label: 'TICKET NUMBER', value: ticket.ticketNumber },
-                { label: 'STATUS',        value: ticket.status },
-                { label: 'PRIORITY',      value: ticket.priority },
-                { label: 'CATEGORY',      value: ticket.category },
-                { label: 'CREATED BY',    value: ticket.raisedBy?.name || 'N/A' },
-                { label: 'ASSIGNED TO',   value: ticket.assignedTo?.name || 'Unassigned' },
-                { label: 'CREATED ON',    value: new Date(ticket.createdAt).toLocaleString() },
-                { label: 'LAST UPDATED',  value: new Date(ticket.updatedAt).toLocaleString() },
-                ...(ticket.resolvedAt ? [{ label: 'RESOLVED ON', value: new Date(ticket.resolvedAt).toLocaleString() }] : []),
+                { label: 'Ticket No.',  value: ticket.ticketNumber },
+                { label: 'Status',      value: sc.label            },
+                { label: 'Priority',    value: pc.label            },
+                { label: 'Category',    value: ticket.category     },
+                { label: 'Raised by',   value: ticket.raisedBy?.name || 'N/A' },
+                { label: 'Assigned to', value: ticket.assignedTo?.name || '—'  },
+                { label: 'Created',     value: new Date(ticket.createdAt).toLocaleString() },
+                { label: 'Updated',     value: new Date(ticket.updatedAt).toLocaleString() },
               ].map(item => (
                 <div key={item.label}>
-                  <p className="text-xs font-semibold mb-1 capitalize" style={{ color: 'var(--text-muted)' }}>
-                    {item.label}
-                  </p>
+                  <p className="text-xs font-semibold mb-0.5 uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>{item.label}</p>
                   <p className="text-sm capitalize" style={{ color: 'var(--text-primary)' }}>{item.value}</p>
                 </div>
               ))}
@@ -265,73 +265,64 @@ export default function TicketsPage() {
  
             {/* Description */}
             <div>
-              <p className="text-xs font-semibold mb-1" style={{ color: 'var(--text-muted)' }}>DESCRIPTION</p>
-              <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>{ticket.description}</p>
+              <p className="text-xs font-semibold uppercase tracking-wide mb-1" style={{ color: 'var(--text-muted)' }}>Description</p>
+              <p className="text-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>{ticket.description}</p>
             </div>
  
-            {/* ── Assigned-to-me Actions (Employee assigned to this ticket) ── */}
+            {/* Assigned-to-me actions (employee) */}
             {isAssignedToMe && !canManage && (
-              <div className="p-4 rounded-xl space-y-3"
-                style={{ background: 'rgba(99,102,241,0.06)', border: '1px solid rgba(99,102,241,0.2)' }}>
-                <p className="text-xs font-semibold" style={{ color: '#818cf8' }}>YOUR ACTIONS</p>
-                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                  This ticket is assigned to you. Update the status as you work on it.
-                </p>
-                <div className="flex gap-1.5 flex-wrap">
-                  {(['in-progress', 'resolved'] as const).map(s => (
-                    <button key={s} onClick={() => handleStatusChange(ticket._id, s)}
-                      disabled={ticket.status === s}
-                      className={cn(
-                        'text-xs px-3 py-1.5 rounded-xl capitalize font-medium transition-all border disabled:opacity-40',
-                        ticket.status === s ? statusColor(s) : ''
-                      )}
-                      style={ticket.status !== s ? {
-                        background: 'var(--bg-surface-3)',
-                        color: 'var(--text-muted)',
-                        border: '1px solid var(--border)',
-                      } : {}}>
-                      Mark as {s}
-                    </button>
-                  ))}
+              <div className="p-4 rounded-xl space-y-2"
+                style={{ background: 'rgba(99,102,241,0.05)', border: '1px solid rgba(99,102,241,0.2)' }}>
+                <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: '#6366f1' }}>Your Actions</p>
+                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>This ticket is assigned to you. Update status as you work on it.</p>
+                <div className="flex gap-2 flex-wrap">
+                  {(['in-progress', 'resolved'] as const).map(s => {
+                    const sc2 = statusConfig[s];
+                    return (
+                      <button key={s} onClick={() => handleStatusChange(ticket._id, s)}
+                        disabled={ticket.status === s}
+                        className={cn('text-xs px-3 py-1.5 rounded-xl capitalize font-medium border transition-all disabled:opacity-50', sc2.cls)}>
+                        Mark as {s}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             )}
  
-            {/* ── Admin / Manager Actions ── */}
+            {/* Admin/Manager actions */}
             {canManage && (
-              <div className="p-4 rounded-xl space-y-3"
-                style={{ background: 'var(--bg-surface-2)', border: '1px solid var(--border)' }}>
-                <p className="text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>
-                  {isAdmin ? 'ADMIN ACTIONS' : 'MANAGER ACTIONS'}
+              <div className="p-4 rounded-xl space-y-4"
+                style={{ background: 'var(--bg-surface-2, #f8fafc)', border: '1px solid var(--border, #e2e8f0)' }}>
+                <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
+                  {isAdmin ? 'Admin Actions' : 'Manager Actions'}
                 </p>
  
                 <div>
-                  <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--text-muted)' }}>
-                    Change Status
-                  </label>
+                  <p className="text-xs mb-2" style={{ color: 'var(--text-muted)' }}>Change Status</p>
                   <div className="flex gap-1.5 flex-wrap">
-                    {STATUSES.map(s => (
-                      <button key={s} onClick={() => handleStatusChange(ticket._id, s)}
-                        className={cn('text-xs px-2.5 py-1.5 rounded-xl capitalize font-medium transition-all border',
-                          ticket.status === s ? statusColor(s) : 'border-transparent')}
-                        style={{
-                          background: ticket.status === s ? undefined : 'var(--bg-surface-3)',
-                          color:      ticket.status === s ? undefined : 'var(--text-muted)',
-                        }}>
-                        {s}
-                      </button>
-                    ))}
+                    {STATUSES.map(s => {
+                      const sc2 = statusConfig[s];
+                      const isActive = ticket.status === s;
+                      return (
+                        <button key={s} onClick={() => handleStatusChange(ticket._id, s)}
+                          className={cn(
+                            'text-xs px-3 py-1.5 rounded-xl capitalize font-medium border transition-all',
+                            isActive ? sc2.cls : 'border-slate-200 text-slate-500 hover:bg-slate-100'
+                          )}>
+                          {sc2.label}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
  
                 <div>
-                  <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--text-muted)' }}>
-                    Assign / Reassign To
-                  </label>
+                  <p className="text-xs mb-2" style={{ color: 'var(--text-muted)' }}>Assign / Reassign To</p>
                   <select value={ticket.assignedTo?._id || ''}
                     onChange={e => handleAssign(ticket._id, e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl text-xs"
-                    style={{ background: 'var(--bg-surface-3)', border: '1px solid var(--border)', color: 'var(--text-primary)', outline: 'none' }}>
+                    className="w-full px-3 py-2 rounded-xl text-sm"
+                    style={{ background: 'var(--card-bg, #fff)', border: '1px solid var(--border, #e2e8f0)', color: 'var(--text-primary)', outline: 'none' }}>
                     <option value="">— Unassigned —</option>
                     {allUsers.map(u => (
                       <option key={u._id} value={u._id}>{u.name} ({u.role})</option>
@@ -343,28 +334,25 @@ export default function TicketsPage() {
  
             {/* Comments */}
             <div>
-              <p className="text-xs font-semibold mb-2" style={{ color: 'var(--text-muted)' }}>
-                COMMENTS ({ticket.comments?.length || 0})
+              <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--text-muted)' }}>
+                Comments ({ticket.comments?.length || 0})
               </p>
-              <div className="space-y-2 mb-3 max-h-48 overflow-y-auto">
+ 
+              <div className="space-y-2 mb-3 max-h-52 overflow-y-auto">
                 {(ticket.comments || []).length === 0 ? (
-                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>No comments yet.</p>
+                  <p className="text-xs py-2" style={{ color: 'var(--text-muted)' }}>No comments yet.</p>
                 ) : (
                   ticket.comments.map((c: any, i: number) => (
-                    <div key={i} className="flex items-start gap-2 p-2.5 rounded-xl"
-                      style={{ background: 'var(--bg-surface-2)' }}>
-                      <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0"
+                    <div key={i} className="flex items-start gap-2">
+                      <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0"
                         style={{ background: '#6366f1' }}>
                         {c.userId?.name?.slice(0, 1) || '?'}
                       </div>
-                      <div className="flex-1">
-                        <p className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
-                          {c.userId?.name || 'User'}
-                          <span className="ml-2 font-normal" style={{ color: 'var(--text-muted)' }}>
-                            {new Date(c.createdAt).toLocaleDateString()}
-                          </span>
-                        </p>
-                        <p className="text-xs mt-0.5" style={{ color: 'var(--text-primary)' }}>{c.text}</p>
+                      <div className="flex-1 px-3 py-2 rounded-xl text-xs"
+                        style={{ background: 'var(--bg-surface-2, #f8fafc)', border: '1px solid var(--border, #e2e8f0)' }}>
+                        <span className="font-medium" style={{ color: 'var(--text-secondary)' }}>{c.userId?.name || 'User'}</span>
+                        <span className="ml-2" style={{ color: 'var(--text-muted)' }}>{new Date(c.createdAt).toLocaleDateString()}</span>
+                        <p className="mt-0.5" style={{ color: 'var(--text-primary)' }}>{c.text}</p>
                       </div>
                     </div>
                   ))
@@ -373,15 +361,15 @@ export default function TicketsPage() {
  
               {ticket.status !== 'closed' && (
                 <div className="flex gap-2">
-                  <input type="text" placeholder="Add a comment..."
+                  <input type="text" placeholder="Add a comment... (Enter to send)"
                     value={comments[ticket._id] || ''}
                     onChange={e => setComments(c => ({ ...c, [ticket._id]: e.target.value }))}
                     onKeyDown={e => e.key === 'Enter' && handleComment(ticket._id)}
                     className="flex-1 px-3 py-2 rounded-xl text-sm"
-                    style={{ background: 'var(--bg-surface-2)', border: '1px solid var(--border)', color: 'var(--text-primary)', outline: 'none' }} />
+                    style={{ background: 'var(--bg-surface-2, #f8fafc)', border: '1px solid var(--border, #e2e8f0)', color: 'var(--text-primary)', outline: 'none' }} />
                   <button onClick={() => handleComment(ticket._id)}
-                    className="px-3 py-2 rounded-xl text-white"
-                    style={{ background: '#6366f1' }}>
+                    className="px-3 py-2 rounded-xl text-white shrink-0"
+                    style={{ background: 'linear-gradient(135deg,#6366f1,#8b5cf6)' }}>
                     <Send className="w-4 h-4" />
                   </button>
                 </div>
@@ -401,12 +389,12 @@ export default function TicketsPage() {
   );
  
   return (
-    <div className="page-wrapper p-6 space-y-6 animate-fade-in">
+    <div className="page-wrapper p-6 space-y-5 animate-fade-in">
  
       {/* Toast */}
       {toast.msg && (
-        <div className="fixed top-6 right-6 z-50 px-4 py-3 rounded-xl text-sm font-medium"
-          style={{ background: toast.type === 'error' ? '#ef4444' : '#10b981', color: '#fff', boxShadow: '0 4px 20px rgba(0,0,0,0.3)' }}>
+        <div className="fixed top-6 right-6 z-50 px-4 py-3 rounded-xl text-sm font-medium shadow-lg"
+          style={{ background: toast.type === 'error' ? '#ef4444' : '#10b981', color: '#fff' }}>
           {toast.msg}
         </div>
       )}
@@ -419,10 +407,10 @@ export default function TicketsPage() {
             {isEmp ? 'Raise and track your IT support requests' : 'Manage and resolve all IT support tickets'}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex gap-2">
           <button onClick={() => setShowModal(true)}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium text-white"
-            style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}>
+            style={{ background: 'linear-gradient(135deg,#6366f1,#8b5cf6)' }}>
             <Plus className="w-4 h-4" /> Raise Ticket
           </button>
           <button onClick={fetchTickets}
@@ -433,95 +421,87 @@ export default function TicketsPage() {
         </div>
       </div>
  
-      {/* Stats */}
+      {/* Stats — clickable filters */}
       <div className="grid grid-cols-5 gap-3">
-        {[
-          { label: 'Total',       value: tickets.length,                                         color: 'text-blue-400',    key: 'all'         },
-          { label: 'Open',        value: tickets.filter(t => t.status === 'open').length,         color: 'text-blue-400',    key: 'open'        },
-          { label: 'In Progress', value: tickets.filter(t => t.status === 'in-progress').length,  color: 'text-amber-400',   key: 'in-progress' },
-          { label: 'Resolved',    value: tickets.filter(t => t.status === 'resolved').length,     color: 'text-emerald-400', key: 'resolved'    },
-          { label: 'Closed',      value: tickets.filter(t => t.status === 'closed').length,       color: 'text-slate-400',   key: 'closed'      },
-        ].map(s => (
+        {statCards.map(s => (
           <button key={s.key} onClick={() => setFilterStatus(s.key)}
-            className="glass-card rounded-xl p-4 text-left transition-all"
+            className="rounded-xl p-4 text-left transition-all"
             style={{
-              border:     filterStatus === s.key ? '1px solid rgba(99,102,241,0.4)' : '1px solid var(--border)',
-              background: filterStatus === s.key ? 'rgba(99,102,241,0.1)'           : 'var(--card-bg)',
+              background: filterStatus === s.key ? 'rgba(99,102,241,0.08)' : 'var(--bg-surface-2)',
+              border:     filterStatus === s.key ? '1.5px solid rgba(99,102,241,0.35)' : '1px solid var(--border)',
             }}>
-            <p className={cn('text-xl font-bold', s.color)}>{s.value}</p>
+            <p className={cn('text-2xl font-bold', s.color)}>{counts[s.key as keyof typeof counts]}</p>
             <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{s.label}</p>
           </button>
         ))}
       </div>
  
-      {/* ── Employee Tabs: My Tickets | Assigned to Me ── */}
-      {isEmp && (
-        <div className="flex gap-2">
-          {([
-            { key: 'my',       label: `My Tickets (${myTickets.length})`            },
-            { key: 'assigned', label: `Assigned to Me (${assignedTickets.length})`  },
-          ] as const).map(tab => (
-            <button key={tab.key} onClick={() => { setActiveTab(tab.key); setExpandedId(null); }}
-              className="px-4 py-2 rounded-xl text-sm font-medium transition-all"
-              style={{
-                background: activeTab === tab.key ? 'linear-gradient(135deg,#6366f1,#8b5cf6)' : 'var(--bg-surface-2)',
-                color:      activeTab === tab.key ? '#fff'                                     : 'var(--text-secondary)',
-                border:     activeTab === tab.key ? 'none'                                     : '1px solid var(--border)',
-              }}>
-              {tab.label}
-            </button>
-          ))}
+      {/* Tabs + Search */}
+      <div className="flex flex-wrap gap-3 items-center">
+        {isEmp && (
+          <div className="flex gap-1.5">
+            {([
+              { key: 'my',       label: `My Tickets (${myTickets.length})`           },
+              { key: 'assigned', label: `Assigned to Me (${assignedTickets.length})` },
+            ] as const).map(tab => (
+              <button key={tab.key} onClick={() => { setActiveTab(tab.key); setExpandedId(null); }}
+                className="px-4 py-2 rounded-xl text-sm font-medium transition-all"
+                style={{
+                  background: activeTab === tab.key ? 'linear-gradient(135deg,#6366f1,#8b5cf6)' : 'var(--bg-surface-2)',
+                  color:      activeTab === tab.key ? '#fff' : 'var(--text-secondary)',
+                  border:     activeTab === tab.key ? 'none' : '1px solid var(--border)',
+                }}>
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        )}
+        <div className="relative flex-1 min-w-48">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: 'var(--text-muted)' }} />
+          <input type="text" placeholder="Search by ticket number or title..."
+            value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+            className="w-full pl-9 pr-4 py-2.5 rounded-xl text-sm"
+            style={{ background: 'var(--bg-surface-2)', border: '1px solid var(--border)', color: 'var(--text-primary)', outline: 'none' }} />
         </div>
-      )}
- 
-      {/* Search bar */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4"
-          style={{ color: 'var(--text-muted)' }} />
-        <input
-          type="text"
-          placeholder="Search by ticket number or title (e.g. TKT-0001)..."
-          value={searchQuery}
-          onChange={e => setSearchQuery(e.target.value)}
-          className="w-full pl-9 pr-4 py-2.5 rounded-xl text-sm"
-          style={{ background: 'var(--bg-surface-2)', border: '1px solid var(--border)', color: 'var(--text-primary)', outline: 'none' }}
-        />
       </div>
  
-      {/* Tickets List */}
+      {/* Ticket List */}
       {filtered.length === 0 ? (
-        <div className="glass-card rounded-2xl p-12 text-center space-y-3">
+        <div className="rounded-2xl p-12 text-center space-y-3"
+          style={{ background: 'var(--bg-surface-2)', border: '1px solid var(--border)' }}>
           <Ticket className="w-12 h-12 mx-auto" style={{ color: 'var(--text-muted)' }} />
-          <p style={{ color: 'var(--text-muted)' }}>
-            {searchQuery ? `No tickets found for "${searchQuery}"` : 'No tickets found.'}
+          <p className="font-medium" style={{ color: 'var(--text-primary)' }}>
+            {searchQuery ? `No tickets found for "${searchQuery}"` : 'No tickets here'}
+          </p>
+          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+            {!searchQuery && 'Raise a ticket if you need IT support.'}
           </p>
           {!searchQuery && (
             <button onClick={() => setShowModal(true)}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-white"
-              style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}>
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-white mt-1"
+              style={{ background: 'linear-gradient(135deg,#6366f1,#8b5cf6)' }}>
               <Plus className="w-4 h-4" /> Raise First Ticket
             </button>
           )}
         </div>
       ) : (
         <div className="space-y-3">
-          {filtered.map((ticket: any) => (
-            <TicketCard key={ticket._id} ticket={ticket} />
-          ))}
+          {filtered.map((ticket: any) => <TicketCard key={ticket._id} ticket={ticket} />)}
         </div>
       )}
  
-      {/* Create Ticket Modal */}
+      {/* ─── Create Ticket Modal ─── */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="rounded-2xl w-full max-w-md shadow-2xl animate-slide-up max-h-[90vh] overflow-y-auto"
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="rounded-2xl w-full max-w-lg shadow-2xl animate-slide-up max-h-[92vh] overflow-y-auto"
             style={{ background: 'var(--bg-surface-1)', border: '1px solid var(--border)' }}>
  
-            <div className="flex items-center justify-between p-5 sticky top-0"
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-5 sticky top-0 z-10"
               style={{ background: 'var(--bg-surface-1)', borderBottom: '1px solid var(--border)' }}>
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 rounded-xl flex items-center justify-center"
-                  style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}>
+                  style={{ background: 'linear-gradient(135deg,#6366f1,#8b5cf6)' }}>
                   <Ticket className="w-5 h-5 text-white" />
                 </div>
                 <div>
@@ -534,54 +514,90 @@ export default function TicketsPage() {
               </button>
             </div>
  
-            <div className="p-5 space-y-4">
+            <div className="p-5 space-y-5">
+ 
+              {/* Title */}
               <div>
-                <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>Issue Title *</label>
+                <label className="block text-xs font-semibold uppercase tracking-wide mb-1.5" style={{ color: 'var(--text-secondary)' }}>
+                  Issue Title *
+                </label>
                 <input type="text" placeholder="e.g. Cannot access VPN"
-                  value={form.title}
-                  onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
+                  value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
                   className="w-full px-3 py-2.5 rounded-xl text-sm"
                   style={{ background: 'var(--bg-surface-2)', border: '1px solid var(--border)', color: 'var(--text-primary)', outline: 'none' }}
                   onFocus={e => e.target.style.borderColor = '#6366f1'}
                   onBlur={e  => e.target.style.borderColor = 'var(--border)'} />
+                <p className="text-xs mt-1 text-right" style={{ color: 'var(--text-muted)' }}>{form.title.length}/100</p>
               </div>
  
+              {/* Description */}
               <div>
-                <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>Description *</label>
-                <textarea rows={3} placeholder="Describe the issue in detail..."
-                  value={form.description}
-                  onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+                <label className="block text-xs font-semibold uppercase tracking-wide mb-1.5" style={{ color: 'var(--text-secondary)' }}>
+                  Description *
+                </label>
+                <textarea rows={3} placeholder="Steps to reproduce, error messages, impact..."
+                  value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
                   className="w-full px-3 py-2.5 rounded-xl text-sm resize-none"
                   style={{ background: 'var(--bg-surface-2)', border: '1px solid var(--border)', color: 'var(--text-primary)', outline: 'none' }}
                   onFocus={e => e.target.style.borderColor = '#6366f1'}
                   onBlur={e  => e.target.style.borderColor = 'var(--border)'} />
+                <p className="text-xs mt-1 text-right" style={{ color: 'var(--text-muted)' }}>{form.description.length}/500</p>
               </div>
  
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>Category</label>
-                  <select value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
-                    className="w-full px-3 py-2.5 rounded-xl text-sm"
-                    style={{ background: 'var(--bg-surface-2)', border: '1px solid var(--border)', color: 'var(--text-primary)', outline: 'none' }}>
-                    {CATEGORIES.map(c => <option key={c} value={c}>{categoryIcon(c)} {c}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>Priority</label>
-                  <select value={form.priority} onChange={e => setForm(f => ({ ...f, priority: e.target.value }))}
-                    className="w-full px-3 py-2.5 rounded-xl text-sm"
-                    style={{ background: 'var(--bg-surface-2)', border: '1px solid var(--border)', color: 'var(--text-primary)', outline: 'none' }}>
-                    {PRIORITIES.map(p => <option key={p} value={p}>{p}</option>)}
-                  </select>
-                </div>
-              </div>
- 
+              {/* Category — pill grid */}
               <div>
-                <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>
-                  <span className="flex items-center gap-1"><Tag className="w-3.5 h-3.5" /> Tag a Person (optional)</span>
+                <label className="block text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--text-secondary)' }}>
+                  Category
                 </label>
-                <select value={form.taggedUserId}
-                  onChange={e => setForm(f => ({ ...f, taggedUserId: e.target.value }))}
+                <div className="grid grid-cols-5 gap-2">
+                  {CATEGORIES.map(c => {
+                    const cc = categoryConfig[c];
+                    const selected = form.category === c;
+                    return (
+                      <button key={c} onClick={() => setForm(f => ({ ...f, category: c }))}
+                        className="flex flex-col items-center gap-1.5 py-2.5 px-1 rounded-xl text-xs font-medium capitalize transition-all border"
+                        style={selected
+                          ? { background: cc.color + '15', border: `1.5px solid ${cc.color}`, color: cc.color }
+                          : { background: 'var(--bg-surface-2)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}>
+                        <span style={{ color: selected ? cc.color : 'var(--text-muted)', display: 'flex' }}>
+                          {cc.icon}
+                        </span>
+                        {c}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+ 
+              {/* Priority — color-coded pills */}
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--text-secondary)' }}>
+                  Priority
+                </label>
+                <div className="grid grid-cols-4 gap-2">
+                  {PRIORITIES.map(p => {
+                    const pc2 = priorityConfig[p];
+                    const selected = form.priority === p;
+                    return (
+                      <button key={p} onClick={() => setForm(f => ({ ...f, priority: p }))}
+                        className={cn(
+                          'py-2.5 rounded-xl text-xs font-semibold capitalize border transition-all',
+                          selected ? pc2.cls : 'border-slate-200 text-slate-400 hover:bg-slate-50'
+                        )}
+                        style={{ background: selected ? undefined : 'var(--bg-surface-2)' }}>
+                        {p}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+ 
+              {/* Tag person */}
+              <div>
+                <label className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide mb-1.5" style={{ color: 'var(--text-secondary)' }}>
+                  <Tag className="w-3.5 h-3.5" /> Tag a Person (optional)
+                </label>
+                <select value={form.taggedUserId} onChange={e => setForm(f => ({ ...f, taggedUserId: e.target.value }))}
                   className="w-full px-3 py-2.5 rounded-xl text-sm"
                   style={{ background: 'var(--bg-surface-2)', border: '1px solid var(--border)', color: 'var(--text-primary)', outline: 'none' }}>
                   <option value="">— No one tagged —</option>
@@ -589,17 +605,18 @@ export default function TicketsPage() {
                     <option key={u._id} value={u._id}>{u.name} ({u.role})</option>
                   ))}
                 </select>
-                <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
-                  Ticket will be directly assigned to this person
-                </p>
+                <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>Ticket will be directly assigned to this person</p>
               </div>
  
-              <div className="p-3 rounded-xl text-xs"
+              {/* Info banner */}
+              <div className="p-3 rounded-xl text-xs flex items-start gap-2"
                 style={{ background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.2)', color: 'var(--text-secondary)' }}>
+                <span className="text-indigo-400 shrink-0 mt-0.5">ℹ</span>
                 Your ticket will be tracked and the tagged person will be notified.
               </div>
             </div>
  
+            {/* Modal Footer */}
             <div className="flex gap-3 p-5 sticky bottom-0"
               style={{ background: 'var(--bg-surface-1)', borderTop: '1px solid var(--border)' }}>
               <button onClick={() => setShowModal(false)}
@@ -609,9 +626,9 @@ export default function TicketsPage() {
               </button>
               <button onClick={handleCreate}
                 disabled={!form.title.trim() || !form.description.trim()}
-                className="flex-1 py-2.5 rounded-xl text-sm font-medium text-white disabled:opacity-50"
-                style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}>
-                Submit Ticket
+                className="flex-1 py-2.5 rounded-xl text-sm font-medium text-white disabled:opacity-50 flex items-center justify-center gap-2"
+                style={{ background: 'linear-gradient(135deg,#6366f1,#8b5cf6)' }}>
+                <Send className="w-4 h-4" /> Submit Ticket
               </button>
             </div>
           </div>
@@ -621,8 +638,6 @@ export default function TicketsPage() {
   );
 }
  
-
-
 
 
 

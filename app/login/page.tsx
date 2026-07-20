@@ -228,18 +228,10 @@ export default function LoginPage() {
               {loading ? 'Logging in...' : 'LOG IN'}
             </button>
 
-            {/* Need help */}
-            <p className="text-center text-sm" style={{ color: subtext }}>
-              Need help?{' '}
-              <button type="button" className="font-semibold" style={{ color: text }}>
-                Contact Us
-              </button>
-            </p>
           </form>
 
-         
           {/* Quick login buttons */}
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-3 gap-2 mt-5">
             {[
               { role: 'admin'    as const, label: 'Admin'    },
               { role: 'manager'  as const, label: 'Manager'  },
@@ -254,7 +246,6 @@ export default function LoginPage() {
             ))}
           </div>
 
-          
         </div>
       </div>
     </div>
